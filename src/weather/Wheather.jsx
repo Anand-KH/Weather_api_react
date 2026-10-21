@@ -1,56 +1,105 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import WeatherCard from './WeatherCard';
 
-
 function Wheather() {
+    const [city, setCity] = useState('Bangalore');
+    const [weather, setWeather] = useState(null);
+    const [error, setError] = useState('');
+    const [loading, setLoading] = useState(false);
 
-    const [city, setCity] = useState("Bangalore");
-    const [temp, setTemp] = useState({});
+    const fetchWeather = useCallback(async (cityName) => {
+        const apiKey = process.env.REACT_APP_WEATHER_API;
+        if (!apiKey) {
+            setError('OpenWeather API key is missing. Add REACT_APP_WEATHER_API to your .env file and restart the app.');
+            return;
+        }
 
-    const whetherInfo = async ()=>{
-        try{
-            let url = `https://api.openweathermap.org/data/2.5/weather?q=${city}&units=metric&appid=${process.env.REACT_APP_WEATHER_API}`;
+        const searchCity = cityName.trim();
+        if (!searchCity) {
+            setError('Enter a city to search for.');
+            return;
+        }
 
-            const res = await fetch(url);
-            const data = await res.json();
+        setLoading(true);
+        setError('');
 
-            const {temp, humidity, pressure} = data.main;
-            const {main:weather} = data.weather[0];
-            const {name} = data;
-            const {country, sunset, sunrise} = data.sys;
-            const {speed} = data.wind;
+        try {
+            const params = new URLSearchParams({
+                q: searchCity,
+                units: 'metric',
+                appid: apiKey
+            });
+            const response = await fetch(`https://api.openweathermap.org/data/2.5/weather?${params}`);
+            const data = await response.json();
 
-            const weatherinfo={
-                temp, humidity, pressure,weather,name,country, sunset,speed,sunrise
-            };
+            if (!response.ok) {
+                throw new Error(data.message || `Weather request failed (${response.status}).`);
+            }
 
-            setTemp(weatherinfo);
-        }catch(err){console.log(err)};
-    };
+            if (!data.main || !data.weather?.[0] || !data.sys || !data.wind) {
+                throw new Error('The weather service returned incomplete weather data.');
+            }
 
-    useEffect(() => {
-        whetherInfo();
+            setWeather(data);
+        } catch (requestError) {
+            setError(requestError.message || 'Unable to load weather data.');
+        } finally {
+            setLoading(false);
+        }
     }, []);
 
+    useEffect(() => {
+        fetchWeather('Bangalore');
+    }, [fetchWeather]);
+
+    const handleSubmit = (event) => {
+        event.preventDefault();
+        fetchWeather(city);
+    };
+
     return (
-        <>
-        <div>
-            <div className="container">
-                <div className="row search">
-                    <div className="col-lg-10 col-md-10 col-sm-12 col-12">
-                        <div className="form-group">
-                            <input type="seaech" className="form-control" autoFocus value={city} onChange={(e)=>setCity(e.target.value)} placeholder="Search.." />
-                        </div>
+        <main className="weather-app">
+            <div className="weather-shell">
+                <header className="app-header">
+                    <a className="brand" href="/" aria-label="Skycast home">
+                        <span className="brand-mark" aria-hidden="true">☁</span>
+                        <span>skycast</span>
+                    </a>
+                    <span className="header-caption">Weather, at a glance</span>
+                </header>
+
+                <section className="weather-content" aria-label="Local weather">
+                    <div className="intro">
+                        <p className="eyebrow">WEATHER DASHBOARD</p>
+                        <h1>Find your forecast.</h1>
+                        <p className="intro-copy">A clear picture of what’s happening outside.</p>
                     </div>
-                    <div className="col-lg-2 col-md-2 col-sm-12 col-12">
-                        <button type="button" className="btn btn-primary" onClick={whetherInfo}>Search</button>
-                    </div>
-                </div>
+
+                    <form className="search-form" onSubmit={handleSubmit}>
+                        <label className="visually-hidden" htmlFor="city-search">Search by city</label>
+                        <span className="search-icon" aria-hidden="true">⌕</span>
+                        <input
+                            id="city-search"
+                            type="search"
+                            value={city}
+                            onChange={(event) => setCity(event.target.value)}
+                            placeholder="Search a city"
+                            autoComplete="off"
+                        />
+                        <button type="submit" disabled={loading}>
+                            {loading ? 'Loading…' : 'Search'}
+                        </button>
+                    </form>
+
+                    {error && <p className="weather-error" role="alert">{error}</p>}
+                    {loading && !weather && <p className="loading-message" role="status">Loading weather…</p>}
+                    {weather && <WeatherCard weather={weather} />}
+                </section>
+
+                <footer className="app-footer">Weather data by OpenWeather</footer>
             </div>
-            <WeatherCard tempInfo={temp}/>
-        </div>
-        </>
-    )
+        </main>
+    );
 }
 
 export default Wheather;
