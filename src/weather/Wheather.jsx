@@ -1,5 +1,7 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import WeatherCard from './WeatherCard';
+import Icon from './Icon';
+import { getSky } from './sky';
 
 function Wheather() {
     const [city, setCity] = useState('Bangalore');
@@ -8,7 +10,7 @@ function Wheather() {
     const [loading, setLoading] = useState(false);
 
     const fetchWeather = useCallback(async (cityName) => {
-        const apiKey = process.env.REACT_APP_WEATHER_API;
+        const apiKey = import.meta.env.REACT_APP_WEATHER_API;
         if (!apiKey) {
             setError('OpenWeather API key is missing. Add REACT_APP_WEATHER_API to your .env file and restart the app.');
             return;
@@ -58,11 +60,11 @@ function Wheather() {
     };
 
     return (
-        <main className="weather-app">
+        <main className="weather-app" data-sky={getSky(weather)}>
             <div className="weather-shell">
                 <header className="app-header">
                     <a className="brand" href="/" aria-label="Skycast home">
-                        <span className="brand-mark" aria-hidden="true">☁</span>
+                        <img className="brand-mark" src="/logo.svg" alt="" width="36" height="36" />
                         <span>skycast</span>
                     </a>
                     <span className="header-caption">Weather, at a glance</span>
@@ -77,7 +79,7 @@ function Wheather() {
 
                     <form className="search-form" onSubmit={handleSubmit}>
                         <label className="visually-hidden" htmlFor="city-search">Search by city</label>
-                        <span className="search-icon" aria-hidden="true">⌕</span>
+                        <span className="search-icon"><Icon name="search" /></span>
                         <input
                             id="city-search"
                             type="search"
@@ -92,7 +94,11 @@ function Wheather() {
                     </form>
 
                     {error && <p className="weather-error" role="alert">{error}</p>}
-                    {loading && !weather && <p className="loading-message" role="status">Loading weather…</p>}
+                    {loading && !weather && (
+                        <div className="loading-card" role="status">
+                            <span className="visually-hidden">Loading weather…</span>
+                        </div>
+                    )}
                     {weather && <WeatherCard weather={weather} />}
                 </section>
 
