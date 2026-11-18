@@ -9,7 +9,9 @@ function CitySearch({ value, onChange, onSearch, onLocate, loading, locating, ne
     const [suggestions, setSuggestions] = useState([]);
     const [open, setOpen] = useState(false);
     const [active, setActive] = useState(-1);
-    const skipNextLookup = useRef(false);
+    // True only while the user is typing; finishing a search (or the app filling the box) clears it.
+    const typingRef = useRef(false);
+    const lookupRef = useRef({ timer: null, controller: null });
     const inputRef = useRef(null);
     // Bias suggestions toward the place currently shown, without re-running the lookup when it changes.
     const nearRef = useRef(near);
@@ -18,16 +20,17 @@ function CitySearch({ value, onChange, onSearch, onLocate, loading, locating, ne
     }, [near]);
     const listId = useId();
 
+    const cancelLookup = () => {
+        clearTimeout(lookupRef.current.timer);
+        lookupRef.current.controller?.abort();
+    };
+
     // Debounced suggestion lookup as the user types.
     useEffect(() => {
-        if (skipNextLookup.current) {
-            skipNextLookup.current = false;
-            return undefined;
-        }
         const text = value.trim();
-        // Only suggest while the user is typing, not when the app fills the box itself.
-        if (text.length < MIN_CHARS || document.activeElement !== inputRef.current) {
+        if (!typingRef.current || text.length < MIN_CHARS) {
             setSuggestions([]);
+            setOpen(false);
             return undefined;
         }
 
@@ -35,26 +38,33 @@ function CitySearch({ value, onChange, onSearch, onLocate, loading, locating, ne
         const timer = setTimeout(async () => {
             try {
                 const results = await searchPlaces(text, nearRef.current, controller.signal);
+                // Ignore results that arrive after the search was completed.
+                if (controller.signal.aborted || !typingRef.current) return;
                 setSuggestions(results);
                 setActive(-1);
-                setOpen(true);
+                setOpen(results.length > 0);
             } catch {
                 // Suggestions are a convenience; a failed lookup just shows none.
                 if (!controller.signal.aborted) setSuggestions([]);
             }
         }, DEBOUNCE_MS);
+        lookupRef.current = { timer, controller };
 
-        return () => {
-            clearTimeout(timer);
-            controller.abort();
-        };
+        return cancelLookup;
     }, [value]);
 
-    const choose = (city) => {
-        skipNextLookup.current = true;
-        onChange(city.label);
+    const finishSearch = () => {
+        typingRef.current = false;
+        cancelLookup();
         setOpen(false);
         setSuggestions([]);
+        setActive(-1);
+        inputRef.current?.blur();
+    };
+
+    const choose = (city) => {
+        finishSearch();
+        onChange(city.label);
         onSearch({ lat: city.lat, lon: city.lon, name: city.name });
     };
 
@@ -64,7 +74,7 @@ function CitySearch({ value, onChange, onSearch, onLocate, loading, locating, ne
             choose(suggestions[active]);
             return;
         }
-        setOpen(false);
+        finishSearch();
         onSearch({ q: value.trim() });
     };
 
@@ -92,9 +102,11 @@ function CitySearch({ value, onChange, onSearch, onLocate, loading, locating, ne
                 ref={inputRef}
                 type="search"
                 value={value}
-                onChange={(event) => onChange(event.target.value)}
+                onChange={(event) => {
+                    typingRef.current = true;
+                    onChange(event.target.value);
+                }}
                 onKeyDown={handleKeyDown}
-                onFocus={() => suggestions.length && setOpen(true)}
                 onBlur={() => setTimeout(() => setOpen(false), 120)}
                 placeholder="Search a city"
                 autoComplete="off"
@@ -107,7 +119,10 @@ function CitySearch({ value, onChange, onSearch, onLocate, loading, locating, ne
             <button
                 type="button"
                 className="locate-button"
-                onClick={onLocate}
+                onClick={() => {
+                    finishSearch();
+                    onLocate();
+                }}
                 disabled={locating}
                 aria-label="Use my location"
                 title="Use my location"
