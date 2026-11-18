@@ -52,3 +52,16 @@ export async function searchCities(text, signal) {
         }))
         .filter((city) => !seen.has(city.label) && seen.add(city.label));
 }
+
+// OpenWeather labels coordinates with its nearest station (e.g. "Kanija Bhavan" for most of
+// central/west Bangalore), so look up a human place name from OpenStreetMap instead.
+export async function reverseGeocode({ lat, lon }, signal) {
+    const query = new URLSearchParams({ lat, lon, format: 'jsonv2', zoom: 16, 'accept-language': 'en' });
+    const response = await fetch(`https://nominatim.openstreetmap.org/reverse?${query}`, { signal });
+    if (!response.ok) return null;
+    const { address = {} } = await response.json();
+    const area = [address.neighbourhood, address.quarter, address.suburb]
+        .find((part) => part && !/\bward\b/i.test(part));
+    const city = address.city || address.town || address.village;
+    return [area, city].filter(Boolean).join(', ') || null;
+}

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import WeatherCard from './WeatherCard';
 import Forecast from './Forecast';
 import CitySearch from './CitySearch';
-import { getCurrentWeather, getForecast } from './api';
+import { getCurrentWeather, getForecast, reverseGeocode } from './api';
 import { getSky } from './sky';
 
 const DEFAULT_CITY = 'Bangalore';
@@ -36,13 +36,17 @@ function Wheather() {
         setLoading(true);
         setError('');
 
-        const [current, upcoming] = await Promise.allSettled([
+        const [current, upcoming, place] = await Promise.allSettled([
             getCurrentWeather(location, controller.signal),
-            getForecast(location, controller.signal)
+            getForecast(location, controller.signal),
+            location.reverse ? reverseGeocode(location, controller.signal) : null
         ]);
         if (controller.signal.aborted) return null;
 
         if (current.status === 'fulfilled') {
+            // Prefer a known place name over OpenWeather's nearest-station label.
+            const name = location.name || (place.status === 'fulfilled' && place.value) || current.value.name;
+            current.value = { ...current.value, name };
             setWeather(current.value);
             // The forecast is a bonus: if only it fails, still show current conditions.
             setForecast(upcoming.status === 'fulfilled' ? upcoming.value : null);
@@ -68,14 +72,14 @@ function Wheather() {
         navigator.geolocation.getCurrentPosition(
             async ({ coords }) => {
                 setLocating(false);
-                const data = await load({ lat: coords.latitude, lon: coords.longitude });
-                if (data) setQuery(`${data.name}, ${data.sys.country}`);
+                const data = await load({ lat: coords.latitude, lon: coords.longitude, reverse: true });
+                if (data) setQuery(data.name);
             },
             (geoError) => {
                 setLocating(false);
                 setError(GEO_ERRORS[geoError.code] || 'Unable to get your location.');
             },
-            { enableHighAccuracy: false, timeout: 10000, maximumAge: 10 * 60 * 1000 }
+            { enableHighAccuracy: true, timeout: 15000, maximumAge: 60 * 1000 }
         );
     };
 

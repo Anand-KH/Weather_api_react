@@ -50,7 +50,7 @@ function CitySearch({ value, onChange, onSearch, onLocate, loading, locating }) 
         onChange(city.label);
         setOpen(false);
         setSuggestions([]);
-        onSearch({ lat: city.lat, lon: city.lon, label: city.label });
+        onSearch({ lat: city.lat, lon: city.lon, name: city.name });
     };
 
     const handleSubmit = (event) => {
