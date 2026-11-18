@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import WeatherCard from './WeatherCard';
-import Forecast from './Forecast';
+import CurrentWeather, { Conditions } from './WeatherCard';
+import { DailyForecast, HourlyForecast } from './Forecast';
 import CitySearch from './CitySearch';
 import { getCurrentWeather, getForecast, reverseGeocode } from './api';
 import { getSky } from './sky';
@@ -91,16 +91,6 @@ function Wheather() {
                         <img className="brand-mark" src="/logo.svg" alt="" width="36" height="36" />
                         <span>skycast</span>
                     </a>
-                    <span className="header-caption">Weather, at a glance</span>
-                </header>
-
-                <section className="weather-content" aria-label="Local weather">
-                    <div className="intro">
-                        <p className="eyebrow">WEATHER DASHBOARD</p>
-                        <h1>Find your forecast.</h1>
-                        <p className="intro-copy">A clear picture of what’s happening outside.</p>
-                    </div>
-
                     <CitySearch
                         value={query}
                         onChange={setQuery}
@@ -109,18 +99,31 @@ function Wheather() {
                         loading={loading}
                         locating={locating}
                     />
+                </header>
 
+                <section className="weather-content" aria-label="Weather">
+                    <h1 className="visually-hidden">Skycast weather</h1>
                     {error && <p className="weather-error" role="alert">{error}</p>}
                     {(loading || locating) && !weather && (
                         <div className="loading-card" role="status">
                             <span className="visually-hidden">Loading weather…</span>
                         </div>
                     )}
-                    {weather && <WeatherCard weather={weather} />}
-                    {weather && forecast && <Forecast forecast={forecast} now={weather.dt} />}
+                    {weather && (
+                        <div className="dashboard">
+                            <div className="dashboard-column">
+                                <CurrentWeather weather={weather} />
+                                {forecast && <DailyForecast forecast={forecast} now={weather.dt} />}
+                            </div>
+                            <div className="dashboard-column">
+                                <Conditions weather={weather} />
+                                {forecast && <HourlyForecast forecast={forecast} />}
+                            </div>
+                        </div>
+                    )}
                 </section>
 
-                <footer className="app-footer">Weather data by OpenWeather</footer>
+                <footer className="app-footer">Weather data by OpenWeather · Place names © OpenStreetMap contributors</footer>
             </div>
         </main>
     );

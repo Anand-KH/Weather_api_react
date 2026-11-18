@@ -31,65 +31,71 @@ function summariseDays(list, offset, now) {
     }));
 }
 
-function Forecast({ forecast, now }) {
+function ForecastIcon({ code, description }) {
+    return (
+        <span className="forecast-icon">
+            <img src={iconUrl(code)} alt={description} width="56" height="56" />
+        </span>
+    );
+}
+
+export function HourlyForecast({ forecast }) {
     const offset = forecast.city?.timezone ?? 0;
     const hours = forecast.list.slice(0, 8);
+
+    return (
+        <section className="panel hourly-card" aria-labelledby="hourly-heading">
+            <div className="panel-heading">
+                <h2 id="hourly-heading">Next 24 hours</h2>
+                <span className="panel-note">Every 3 hours</span>
+            </div>
+            <ol className="hourly-list">
+                {hours.map((entry) => (
+                    <li key={entry.dt} className="hourly-item">
+                        <span className="hourly-time">{toLocal(entry.dt, offset).toISOString().slice(11, 16)}</span>
+                        <ForecastIcon code={entry.weather[0].icon} description={entry.weather[0].description} />
+                        <strong className="hourly-temp">{Math.round(entry.main.temp)}°</strong>
+                        <span className="hourly-pop" aria-label={`${Math.round((entry.pop ?? 0) * 100)}% chance of rain`}>
+                            {entry.pop >= 0.1 ? `${Math.round(entry.pop * 100)}%` : ' '}
+                        </span>
+                    </li>
+                ))}
+            </ol>
+        </section>
+    );
+}
+
+export function DailyForecast({ forecast, now }) {
+    const offset = forecast.city?.timezone ?? 0;
     const days = summariseDays(forecast.list, offset, now);
     const weekMin = Math.min(...days.map((day) => day.min));
     const weekMax = Math.max(...days.map((day) => day.max));
     const span = Math.max(weekMax - weekMin, 1);
 
     return (
-        <div className="forecast-grid">
-            <section className="forecast-card" aria-labelledby="hourly-heading">
-                <div className="details-heading">
-                    <h2 id="hourly-heading">Next 24 hours</h2>
-                    <span className="details-note">Every 3 hours</span>
-                </div>
-                <ol className="hourly-list">
-                    {hours.map((entry) => (
-                        <li key={entry.dt} className="hourly-item">
-                            <span className="hourly-time">{toLocal(entry.dt, offset).toISOString().slice(11, 16)}</span>
-                            <span className="forecast-icon">
-                                <img src={iconUrl(entry.weather[0].icon)} alt={entry.weather[0].description} width="56" height="56" />
-                            </span>
-                            <strong className="hourly-temp">{Math.round(entry.main.temp)}°</strong>
-                            <span className="hourly-pop" aria-label={`${Math.round((entry.pop ?? 0) * 100)}% chance of rain`}>
-                                {entry.pop >= 0.1 ? `${Math.round(entry.pop * 100)}%` : ' '}
-                            </span>
-                        </li>
-                    ))}
-                </ol>
-            </section>
-
-            <section className="forecast-card" aria-labelledby="daily-heading">
-                <div className="details-heading">
-                    <h2 id="daily-heading">5-day forecast</h2>
-                </div>
-                <ul className="daily-list">
-                    {days.map((day) => (
-                        <li key={day.key} className="daily-item">
-                            <span className="daily-day">{day.label}</span>
-                            <span className="forecast-icon">
-                                <img src={iconUrl(day.icon)} alt={day.description} width="56" height="56" />
-                            </span>
-                            <span className="daily-pop">{day.pop >= 0.1 ? `${Math.round(day.pop * 100)}%` : ''}</span>
-                            <span className="daily-min">{Math.round(day.min)}°</span>
-                            <span className="daily-bar" aria-hidden="true">
-                                <span
-                                    style={{
-                                        left: `${((day.min - weekMin) / span) * 100}%`,
-                                        right: `${((weekMax - day.max) / span) * 100}%`
-                                    }}
-                                />
-                            </span>
-                            <span className="daily-max">{Math.round(day.max)}°</span>
-                        </li>
-                    ))}
-                </ul>
-            </section>
-        </div>
+        <section className="panel daily-card" aria-labelledby="daily-heading">
+            <div className="panel-heading">
+                <h2 id="daily-heading">5-day forecast</h2>
+            </div>
+            <ul className="daily-list">
+                {days.map((day) => (
+                    <li key={day.key} className="daily-item">
+                        <span className="daily-day">{day.label}</span>
+                        <ForecastIcon code={day.icon} description={day.description} />
+                        <span className="daily-pop">{day.pop >= 0.1 ? `${Math.round(day.pop * 100)}%` : ''}</span>
+                        <span className="daily-min">{Math.round(day.min)}°</span>
+                        <span className="daily-bar" aria-hidden="true">
+                            <span
+                                style={{
+                                    left: `${((day.min - weekMin) / span) * 100}%`,
+                                    right: `${((weekMax - day.max) / span) * 100}%`
+                                }}
+                            />
+                        </span>
+                        <span className="daily-max">{Math.round(day.max)}°</span>
+                    </li>
+                ))}
+            </ul>
+        </section>
     );
 }
-
-export default Forecast;
