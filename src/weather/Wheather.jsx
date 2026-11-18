@@ -98,6 +98,7 @@ function Wheather() {
                         onLocate={handleLocate}
                         loading={loading}
                         locating={locating}
+                        near={weather?.coord}
                     />
                 </header>
 

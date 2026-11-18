@@ -1,16 +1,21 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import Icon from './Icon';
-import { searchCities } from './api';
+import { searchPlaces } from './api';
 
 const MIN_CHARS = 2;
 const DEBOUNCE_MS = 300;
 
-function CitySearch({ value, onChange, onSearch, onLocate, loading, locating }) {
+function CitySearch({ value, onChange, onSearch, onLocate, loading, locating, near }) {
     const [suggestions, setSuggestions] = useState([]);
     const [open, setOpen] = useState(false);
     const [active, setActive] = useState(-1);
     const skipNextLookup = useRef(false);
     const inputRef = useRef(null);
+    // Bias suggestions toward the place currently shown, without re-running the lookup when it changes.
+    const nearRef = useRef(near);
+    useEffect(() => {
+        nearRef.current = near;
+    }, [near]);
     const listId = useId();
 
     // Debounced suggestion lookup as the user types.
@@ -29,7 +34,7 @@ function CitySearch({ value, onChange, onSearch, onLocate, loading, locating }) 
         const controller = new AbortController();
         const timer = setTimeout(async () => {
             try {
-                const results = await searchCities(text, controller.signal);
+                const results = await searchPlaces(text, nearRef.current, controller.signal);
                 setSuggestions(results);
                 setActive(-1);
                 setOpen(true);
@@ -128,7 +133,7 @@ function CitySearch({ value, onChange, onSearch, onLocate, loading, locating }) 
                         >
                             <Icon name="pin" size={16} />
                             <span className="suggestion-name">{city.name}</span>
-                            <span className="suggestion-meta">{[city.state, city.country].filter(Boolean).join(', ')}</span>
+                            <span className="suggestion-meta">{city.meta}</span>
                         </li>
                     ))}
                 </ul>
