@@ -1,62 +1,82 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import WeatherCard from './WeatherCard';
-import Icon from './Icon';
+import Forecast from './Forecast';
+import CitySearch from './CitySearch';
+import { getCurrentWeather, getForecast } from './api';
 import { getSky } from './sky';
 
+const DEFAULT_CITY = 'Bangalore';
+
+const GEO_ERRORS = {
+    1: 'Location access was denied. Allow it in your browser settings, or search for a city.',
+    2: 'Your location could not be determined. Try searching for a city.',
+    3: 'Finding your location took too long. Try again or search for a city.'
+};
+
 function Wheather() {
-    const [city, setCity] = useState('Bangalore');
+    const [query, setQuery] = useState(DEFAULT_CITY);
     const [weather, setWeather] = useState(null);
+    const [forecast, setForecast] = useState(null);
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+    const [locating, setLocating] = useState(false);
+    const controllerRef = useRef(null);
 
-    const fetchWeather = useCallback(async (cityName) => {
-        const apiKey = import.meta.env.REACT_APP_WEATHER_API;
-        if (!apiKey) {
-            setError('OpenWeather API key is missing. Add REACT_APP_WEATHER_API to your .env file and restart the app.');
-            return;
-        }
-
-        const searchCity = cityName.trim();
-        if (!searchCity) {
+    const load = useCallback(async (location) => {
+        if (location.q !== undefined && !location.q) {
             setError('Enter a city to search for.');
-            return;
+            return null;
         }
+
+        // Cancel any request still in flight so a slow response can't overwrite a newer one.
+        controllerRef.current?.abort();
+        const controller = new AbortController();
+        controllerRef.current = controller;
 
         setLoading(true);
         setError('');
 
-        try {
-            const params = new URLSearchParams({
-                q: searchCity,
-                units: 'metric',
-                appid: apiKey
-            });
-            const response = await fetch(`https://api.openweathermap.org/data/2.5/weather?${params}`);
-            const data = await response.json();
+        const [current, upcoming] = await Promise.allSettled([
+            getCurrentWeather(location, controller.signal),
+            getForecast(location, controller.signal)
+        ]);
+        if (controller.signal.aborted) return null;
 
-            if (!response.ok) {
-                throw new Error(data.message || `Weather request failed (${response.status}).`);
-            }
-
-            if (!data.main || !data.weather?.[0] || !data.sys || !data.wind) {
-                throw new Error('The weather service returned incomplete weather data.');
-            }
-
-            setWeather(data);
-        } catch (requestError) {
-            setError(requestError.message || 'Unable to load weather data.');
-        } finally {
-            setLoading(false);
+        if (current.status === 'fulfilled') {
+            setWeather(current.value);
+            // The forecast is a bonus: if only it fails, still show current conditions.
+            setForecast(upcoming.status === 'fulfilled' ? upcoming.value : null);
+        } else {
+            setError(current.reason?.message || 'Unable to load weather data.');
         }
+        setLoading(false);
+        return current.status === 'fulfilled' ? current.value : null;
     }, []);
 
     useEffect(() => {
-        fetchWeather('Bangalore');
-    }, [fetchWeather]);
+        load({ q: DEFAULT_CITY });
+        return () => controllerRef.current?.abort();
+    }, [load]);
 
-    const handleSubmit = (event) => {
-        event.preventDefault();
-        fetchWeather(city);
+    const handleLocate = () => {
+        if (!navigator.geolocation) {
+            setError('Your browser does not support location access. Search for a city instead.');
+            return;
+        }
+        setLocating(true);
+        setError('');
+        navigator.geolocation.getCurrentPosition(
+            async ({ coords }) => {
+                setLocating(false);
+                const data = await load({ lat: coords.latitude, lon: coords.longitude });
+                if (data) setQuery(`${data.name}, ${data.sys.country}`);
+            },
+            (geoError) => {
+                setLocating(false);
+                setError(GEO_ERRORS[geoError.code] || 'Unable to get your location.');
+            },
+            { enableHighAccuracy: false, timeout: 10000, maximumAge: 10 * 60 * 1000 }
+        );
     };
 
     return (
@@ -77,29 +97,23 @@ function Wheather() {
                         <p className="intro-copy">A clear picture of what’s happening outside.</p>
                     </div>
 
-                    <form className="search-form" onSubmit={handleSubmit}>
-                        <label className="visually-hidden" htmlFor="city-search">Search by city</label>
-                        <span className="search-icon"><Icon name="search" /></span>
-                        <input
-                            id="city-search"
-                            type="search"
-                            value={city}
-                            onChange={(event) => setCity(event.target.value)}
-                            placeholder="Search a city"
-                            autoComplete="off"
-                        />
-                        <button type="submit" disabled={loading}>
-                            {loading ? 'Loading…' : 'Search'}
-                        </button>
-                    </form>
+                    <CitySearch
+                        value={query}
+                        onChange={setQuery}
+                        onSearch={load}
+                        onLocate={handleLocate}
+                        loading={loading}
+                        locating={locating}
+                    />
 
                     {error && <p className="weather-error" role="alert">{error}</p>}
-                    {loading && !weather && (
+                    {(loading || locating) && !weather && (
                         <div className="loading-card" role="status">
                             <span className="visually-hidden">Loading weather…</span>
                         </div>
                     )}
                     {weather && <WeatherCard weather={weather} />}
+                    {weather && forecast && <Forecast forecast={forecast} now={weather.dt} />}
                 </section>
 
                 <footer className="app-footer">Weather data by OpenWeather</footer>
